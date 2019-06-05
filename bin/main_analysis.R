@@ -1,5 +1,4 @@
 # reproducible example
-#### libraries ####
 #### input ####
 working_directory = './'
 setwd(working_directory)
