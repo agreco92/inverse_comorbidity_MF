@@ -1,13 +1,17 @@
 # reproducible example
 #### libraries ####
 #### input ####
-working_directory = '/Users/agreco/Nextcloud/inverse_comorbidity_paper/reproducible_example/'
+working_directory = './'
 setwd(working_directory)
-datasets_folder = './data/datasets_IC2/'
-
+datasets_folder = './data/datasets_IC2/' 
+# this folder must contain separate folders with the metagenes and metasample matrices to analyze.
+# The metagenes and metasample matrices must be in the format: dataset name + m_samples_tag/m_genes_tag
+# For example, the dataset 'pippo' will have to follow the following path: ./data/datasets_IC2/pippo/pippo_A.xls (analogously for S)
 m_samples_tag = '_A.xls' # identifier for meta-samples (samples x ic) matrix inside single datasets folders
 m_genes_tag = '_S.xls'  # identifier for meta-genes matrix (genes x ic) inside single datasets folders
 case_tag = 'Case' # identifier of case samples for orienting components
+diseases = c('Alzheimer','Lung') # strings that identify the conditions in the network
+
 # network parameters
 disease_pointing_orientation = TRUE # if TRUE, orients the components maximising the projection of case metasamples onto metagenes [ref paper]
 
@@ -26,7 +30,7 @@ if(disease_pointing_orientation){
     
     cases_cols = rownames(m_samples)[grep(case_tag,x = rownames(m_samples))] # columns containing case tag
     cases = m_samples[cases_cols,] # subsetting full matrix
-    #flip ICs in which the average projection of the cases is negative
+    # flip ICs in which the average projection of the cases is negative
     for (col in colnames(m_genes)){
       if (mean(cases[,col]) < 0){
         flipping_matrix[folder,col] = -1
@@ -44,7 +48,7 @@ for (n1 in dir(datasets_folder)[-length(dir(datasets_folder))]){
   name1 = paste0(datasets_folder,n1,'/',n1,m_genes_tag)
   d1 = read.table(name1,header = TRUE,row.names = 1)
   dis1 = grep(pattern = "Alzheimer|Lung",x = unlist(strsplit(n1,split="-|_")),value = TRUE)
-  for (n2 in dir(datasets_folder)[(match(x = n1,dir(datasets_folder))+1):length(dir(datasets_folder))]){ 
+  for (n2 in dir(datasets_folder)[(match(x = n1,dir(datasets_folder))+1):length(dir(datasets_folder))]){ #cycle on remaining folders
     #n2 = dir(datasets_folder)[2]
     print(c(n1,n2))
     name2 <- paste0(datasets_folder,n2,'/',n2,m_genes_tag)
@@ -87,14 +91,13 @@ matrice[,3]= unlist(weight)
 tabla = as.table(matrice)
 
 #### prune links #####
-diseases = c('Alzheimer','Lung') # strings that identify the case condition in the network
 disease_table = tabla # this table will be used to prune the links
 
 for(disease in diseases){
   disease_table = gsub(paste0('.*',disease,'.*'), disease ,disease_table)
 }
 
-# filter for different condition and negative links
+# keep negative links between metagenes from different conditions
 mask = (disease_table[,1]!= disease_table[,2]) & disease_table[,3]<0
 tmp_tabla = tabla[mask,] # filtered edge list
 #### community detection ####
@@ -107,12 +110,13 @@ for(row in 1:nrow(tmp_tabla)){ #fill the adjacency matrix
   adj_matrix[tmp_tabla[row,2],tmp_tabla[row,1]] =1
 }
 
+# community analysis
 library(MCL)
 labels = MCL::mcl(adj_matrix,addLoops = F,allow1 = T)$Cluster
 
 #### average metagenes ####
 library(tidyverse)
-sigmas = 3 # how many standard deviation from the mean should a gene be to enter the list?
+sigmas = 3 # how many standard deviations from the mean should a gene be to enter the list?
 community_table = tibble(metagene = nodes, cluster = labels)
 for (cluster in unique(community_table$cluster)){
   metagenes = unlist(community_table[community_table$cluster == cluster,1])
@@ -125,8 +129,8 @@ for (cluster in unique(community_table$cluster)){
     return(full_mgene)
   })
   mat = Reduce(inner_join, metagenes)
-  # flip the LC
-  mat[,grepl('Lung', colnames(mat))] = - mat[,grepl('Lung', colnames(mat))]
+  # flip the Lung components (substitute with appropriate tag
+  mat[,grepl(diseases[2], colnames(mat))] = - mat[,grepl(diseases[2], colnames(mat))]
   # rownames(mgenes) = rownames(dset)
   average.metagene = rowMeans(mat %>% select(-gene))
   # enrichment thing
@@ -135,7 +139,7 @@ for (cluster in unique(community_table$cluster)){
   bot_mergene = average.metagene[average.metagene< mean(average.metagene) - sigmas *sqrt(var(average.metagene))]
   top_mergene = names(top_mergene[order(top_mergene,decreasing=TRUE)])
   bot_mergene = names(bot_mergene[order(bot_mergene,decreasing=TRUE)])
-  
-  # write.table(top_mergene,file = paste('./data/top_genes/',cluster,'_',sigmas,'_sigmas','_up.csv',sep = ''),col.names =FALSE,quote = FALSE,sep = '\t',row.names=FALSE)
-  # write.table(bot_mergene,file = paste('./data/top_genes/',cluster,'_',sigmas,'_sigmas','_dn.csv',sep = ''),col.names = FALSE,quote = FALSE,sep = '\t',row.names=FALSE)
+  # write results
+  write.table(top_mergene,file = paste('./data/top_genes/',cluster,'_',sigmas,'_sigmas','_up.csv',sep = ''),col.names =FALSE,quote = FALSE,sep = '\t',row.names=FALSE)
+  write.table(bot_mergene,file = paste('./data/top_genes/',cluster,'_',sigmas,'_sigmas','_dn.csv',sep = ''),col.names = FALSE,quote = FALSE,sep = '\t',row.names=FALSE)
 }
