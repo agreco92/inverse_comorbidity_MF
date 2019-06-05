@@ -1,0 +1,1 @@
+The code contained in this repository is not intended for usage "out of the box", but to facilitate both the reproduction of the paper results, and the implementation of a similar strategies in different problems.
